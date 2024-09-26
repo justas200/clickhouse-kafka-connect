@@ -224,6 +224,9 @@ public class ClickHouseWriter implements DBWriter {
                     String dataTypeName = obj.getFieldType().getName().toUpperCase();
                     // TODO: make extra validation for Map/Array type
                     LOGGER.debug(String.format("Column type name [%s] and data type name [%s]", colTypeName, dataTypeName));
+
+                    LOGGER.info(String.format("JUSTAS --- Table column name [%s], [%s], [%s], [%s], [%s]", col.getName(), col.getType(), dataTypeName, colName, colTypeName));
+
                     switch (colTypeName) {
                         case "Date":
                         case "Date32":
@@ -256,7 +259,7 @@ public class ClickHouseWriter implements DBWriter {
                                 if (colTypeName.equalsIgnoreCase("UINT64") && dataTypeName.equals("INT64"))
                                     continue;
 
-                                if (("DECIMAL".equalsIgnoreCase(colTypeName) && objSchema.name().equals("org.apache.kafka.connect.data.Decimal")))
+                                if ("DECIMAL".equalsIgnoreCase(colTypeName))
                                     continue;
 
                                 validSchema = false;
@@ -419,12 +422,26 @@ public class ClickHouseWriter implements DBWriter {
             case Decimal:
                 if (value.getObject() == null) {
                     BinaryStreamUtils.writeNull(stream);
-                    return;
+                    return
                 } else {
-                    BigDecimal decimal = (BigDecimal) value.getObject();
+                    Object obj = value.getObject();
+                    BigDecimal decimal;
+
+                    if (obj instanceof BigDecimal) {
+                        decimal = (BigDecimal) obj;
+                    } else if (obj instanceof Double) {
+                        decimal = BigDecimal.valueOf((Double) obj);
+                    } else if (obj instanceof Float) {
+                        decimal = BigDecimal.valueOf((Float) obj);
+                    } else if (obj instanceof Number) {
+                        decimal = BigDecimal.valueOf(((Number) obj).doubleValue());
+                    } else {
+                        throw new IllegalArgumentException("Unsupported type for Decimal conversion: " + obj.getClass());
+                    }
                     BinaryStreamUtils.writeDecimal(stream, decimal, col.getPrecision(), col.getScale());
                 }
                 break;
+
             case MAP:
                 Map<?, ?> mapTmp = (Map<?, ?>) value.getObject();
                 int mapSize = mapTmp.size();
